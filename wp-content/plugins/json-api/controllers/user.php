@@ -145,6 +145,88 @@ class JSON_API_User_Controller {
 		  ); 
 	}
 	
+	/*
+	http://localhost/api/user/retrieve_password/?user_login=john
+	user_login co the la email luon.
+	*/
+	public function retrieve_password(){
+		global $wpdb, $json_api, $wp_hasher;  
+
+		if (!$json_api->query->user_login) {
+			$json_api->error("You must include 'user_login' var in your request. ");
+		}
+
+		$user_login = $json_api->query->user_login;
+
+		if ( strpos( $user_login, '@' ) ) {
+			$user_data = get_user_by( 'email', trim( $user_login ) );
+			if ( empty( $user_data ) ){
+				$json_api->error("Your email address not found! ");
+			}
+        } else {
+        	$login = trim($user_login);
+        	$user_data = get_user_by('login', $login);
+        }
+        // redefining user_login ensures we return the right case in the email
+		$user_login = $user_data->user_login;
+		$user_email = $user_data->user_email;
+	
+		do_action('retrieve_password', $user_login);
+	
+		$allow = apply_filters('allow_password_reset', true, $user_data->ID);
+
+		if ( ! $allow ){
+			$json_api->error("password reset not allowed! ");        
+		}elseif ( is_wp_error($allow) ){
+			$json_api->error("An error occured! "); 
+		}
+
+		$key = wp_generate_password( 20, false );
+		do_action( 'retrieve_password_key', $user_login, $key );
+
+		if ( empty( $wp_hasher ) ) {	
+			require_once ABSPATH . 'wp-includes/class-phpass.php';	
+			$wp_hasher = new PasswordHash( 8, true );	
+		}
+
+    
+		$hashed = time() . ':' . $wp_hasher->HashPassword( $key );
+	
+		$wpdb->update( $wpdb->users, array( 'user_activation_key' => $hashed ), array( 'user_login' => $user_login ) ); 
+	
+		$message = __('Someone requested that the password be reset for the following account:') . "\r\n\r\n";
+	
+		$message .= network_home_url( '/' ) . "\r\n\r\n";
+	
+		$message .= sprintf(__('Username: %s'), $user_login) . "\r\n\r\n";
+	
+		$message .= __('If this was a mistake, just ignore this email and nothing will happen.') . "\r\n\r\n";
+	
+		$message .= __('To reset your password, visit the following address:') . "\r\n\r\n";
+	
+		$message .= '<' . network_site_url("wp-login.php?action=rp&key=$key&login=" . rawurlencode($user_login), 'login') . ">\r\n";
+
+
+
+		if ( is_multisite() )	
+			$blogname = $GLOBALS['current_site']->site_name;	
+		else	
+			$blogname = wp_specialchars_decode(get_option('blogname'), ENT_QUOTES);
+
+
+		$title = sprintf( __('[%s] Password Reset'), $blogname );	
+		$title = apply_filters('retrieve_password_title', $title);	
+		$message = apply_filters('retrieve_password_message', $message, $key);
+
+
+		if ( $message && !wp_mail($user_email, $title, $message) )	
+		   $json_api->error("The e-mail could not be sent. Possible reason: your host may have disabled the mail() function...");	
+		else 
+			return array(
+				"msg" => 'Link for password reset has been emailed to you. Please check your email.',	
+			  ); 
+	} 
+	
 	
 	
 }
