@@ -78,7 +78,7 @@ class JSON_API {
     
     $available_controllers = $this->get_controllers();
     $active_controllers = explode(',', get_option('json_api_controllers', 'core'));
-    
+   
     if (count($active_controllers) == 1 && empty($active_controllers[0])) {
       $active_controllers = array();
     }
@@ -97,7 +97,6 @@ class JSON_API {
         } else {
           $controllers = array($_REQUEST['controller']);
         }
-        
         foreach ($controllers as $controller) {
           if (in_array($controller, $available_controllers)) {
             if ($action == 'activate' && !in_array($controller, $active_controllers)) {
